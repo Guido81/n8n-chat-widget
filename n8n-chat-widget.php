@@ -60,6 +60,7 @@ class N8N_Chat_Widget {
      */
     public function get_default_settings() {
         return array(
+            'enabled' => true,
             'webhookUrl' => '',
             'primaryColor' => '#00BFA5',
             'secondaryColor' => '#009688',
@@ -91,6 +92,14 @@ class N8N_Chat_Widget {
      * Enqueue frontend assets
      */
     public function enqueue_frontend_assets() {
+        // Get settings and check if widget is enabled
+        $settings = $this->get_settings();
+        
+        // Return early if widget is not enabled
+        if (!(bool)$settings['enabled']) {
+            return;
+        }
+        
         // Enqueue CSS
         wp_enqueue_style(
             'n8n-chat-widget-style',
@@ -109,7 +118,6 @@ class N8N_Chat_Widget {
         );
         
         // Localize script with config
-        $settings = $this->get_settings();
         wp_localize_script('n8n-chat-widget-script', 'ChatWidgetConfig', $settings);
     }
     
@@ -142,6 +150,11 @@ class N8N_Chat_Widget {
     public function output_widget_html() {
         $settings = $this->get_settings();
         
+        // Only show widget if enabled
+        if (empty($settings['enabled'])) {
+            return;
+        }
+        
         // Only show widget if webhook URL is configured
         if (empty($settings['webhookUrl'])) {
             return;
@@ -154,7 +167,7 @@ class N8N_Chat_Widget {
             </div>
             <div id="teaser-bubble">
                 <span id="teaser-close">×</span>
-                <div style="display: flex; align-items: center;">
+                <div style="display: flex; align-items: start;">
                     <img id="teaser-avatar" src="<?php echo esc_url($settings['teaserAvatar']); ?>" alt="Avatar">
                     <div id="teaser-text"><?php echo esc_html($settings['teaserText']); ?></div>
                 </div>
@@ -214,6 +227,19 @@ class N8N_Chat_Widget {
             __('Chat Widget Configuration', 'n8n-chat-widget'),
             array($this, 'render_section_description'),
             'n8n-chat-widget'
+        );
+        
+        // Enable Widget
+        add_settings_field(
+            'enabled',
+            __('Enable Widget', 'n8n-chat-widget'),
+            array($this, 'render_checkbox_field'),
+            'n8n-chat-widget',
+            'n8n_chat_main_section',
+            array(
+                'field_id' => 'enabled',
+                'description' => __('Check this box to display the chat widget on your website', 'n8n-chat-widget')
+            )
         );
         
         // Webhook URL (required)
@@ -580,6 +606,7 @@ class N8N_Chat_Widget {
         $sanitized['poweredByLink'] = isset($input['poweredByLink']) ? esc_url_raw($input['poweredByLink']) : $defaults['poweredByLink'];
         
         // Checkboxes
+        $sanitized['enabled'] = isset($input['enabled']) && $input['enabled'] == '1';
         $sanitized['showTeaserOnLoad'] = isset($input['showTeaserOnLoad']) && $input['showTeaserOnLoad'] == '1';
         $sanitized['showBadge'] = isset($input['showBadge']) && $input['showBadge'] == '1';
         
