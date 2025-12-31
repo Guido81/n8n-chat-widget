@@ -117,6 +117,11 @@ class N8N_Chat_Widget {
      */
     public function output_widget_html() {
         $settings = $this->get_settings();
+        
+        // Only show widget if webhook URL is configured
+        if (empty($settings['webhookUrl'])) {
+            return;
+        }
         ?>
         <div id="chat-widget-container">
             <div id="chat-button">
@@ -205,7 +210,7 @@ class N8N_Chat_Widget {
         add_settings_field(
             'primaryColor',
             __('Primary Color', 'n8n-chat-widget'),
-            array($this, 'render_text_field'),
+            array($this, 'render_color_field'),
             'n8n-chat-widget',
             'n8n_chat_main_section',
             array(
@@ -218,7 +223,7 @@ class N8N_Chat_Widget {
         add_settings_field(
             'secondaryColor',
             __('Secondary Color', 'n8n-chat-widget'),
-            array($this, 'render_text_field'),
+            array($this, 'render_color_field'),
             'n8n-chat-widget',
             'n8n_chat_main_section',
             array(
@@ -231,7 +236,7 @@ class N8N_Chat_Widget {
         add_settings_field(
             'backgroundColor',
             __('Background Color', 'n8n-chat-widget'),
-            array($this, 'render_text_field'),
+            array($this, 'render_color_field'),
             'n8n-chat-widget',
             'n8n_chat_main_section',
             array(
@@ -411,6 +416,34 @@ class N8N_Chat_Widget {
     }
     
     /**
+     * Render color field
+     */
+    public function render_color_field($args) {
+        $settings = $this->get_settings();
+        $field_id = $args['field_id'];
+        $value = isset($settings[$field_id]) ? $settings[$field_id] : '';
+        
+        echo '<input type="color" name="n8n_chat_settings[' . esc_attr($field_id) . ']" value="' . esc_attr($value) . '" class="n8n-color-picker">';
+        echo ' <input type="text" value="' . esc_attr($value) . '" class="regular-text n8n-color-text" readonly style="margin-left: 10px; width: 100px;">';
+        if (isset($args['description'])) {
+            echo '<p class="description">' . esc_html($args['description']) . '</p>';
+        }
+        ?>
+        <script>
+        (function() {
+            var colorInputs = document.querySelectorAll('.n8n-color-picker');
+            colorInputs.forEach(function(input) {
+                var textInput = input.nextElementSibling;
+                input.addEventListener('change', function() {
+                    textInput.value = this.value;
+                });
+            });
+        })();
+        </script>
+        <?php
+    }
+    
+    /**
      * Render textarea field
      */
     public function render_textarea_field($args) {
@@ -474,6 +507,26 @@ class N8N_Chat_Widget {
     }
     
     /**
+     * Sanitize hex color
+     */
+    private function sanitize_hex_color_field($color) {
+        // Remove any whitespace
+        $color = trim($color);
+        
+        // Check if it's a valid hex color
+        if (preg_match('/^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/', $color)) {
+            return $color;
+        }
+        
+        // If no hash, add it
+        if (preg_match('/^([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/', $color)) {
+            return '#' . $color;
+        }
+        
+        return '';
+    }
+    
+    /**
      * Sanitize settings
      */
     public function sanitize_settings($input) {
@@ -486,9 +539,20 @@ class N8N_Chat_Widget {
         }
         
         // Colors
-        $sanitized['primaryColor'] = isset($input['primaryColor']) ? sanitize_hex_color($input['primaryColor']) : $defaults['primaryColor'];
-        $sanitized['secondaryColor'] = isset($input['secondaryColor']) ? sanitize_hex_color($input['secondaryColor']) : $defaults['secondaryColor'];
-        $sanitized['backgroundColor'] = isset($input['backgroundColor']) ? sanitize_hex_color($input['backgroundColor']) : $defaults['backgroundColor'];
+        $sanitized['primaryColor'] = isset($input['primaryColor']) ? $this->sanitize_hex_color_field($input['primaryColor']) : $defaults['primaryColor'];
+        $sanitized['secondaryColor'] = isset($input['secondaryColor']) ? $this->sanitize_hex_color_field($input['secondaryColor']) : $defaults['secondaryColor'];
+        $sanitized['backgroundColor'] = isset($input['backgroundColor']) ? $this->sanitize_hex_color_field($input['backgroundColor']) : $defaults['backgroundColor'];
+        
+        // Fallback to defaults if sanitization returns empty
+        if (empty($sanitized['primaryColor'])) {
+            $sanitized['primaryColor'] = $defaults['primaryColor'];
+        }
+        if (empty($sanitized['secondaryColor'])) {
+            $sanitized['secondaryColor'] = $defaults['secondaryColor'];
+        }
+        if (empty($sanitized['backgroundColor'])) {
+            $sanitized['backgroundColor'] = $defaults['backgroundColor'];
+        }
         
         // Position
         $sanitized['position'] = isset($input['position']) && in_array($input['position'], array('left', 'right')) ? $input['position'] : $defaults['position'];
