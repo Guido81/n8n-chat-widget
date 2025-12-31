@@ -52,6 +52,7 @@ class N8N_Chat_Widget {
         // Admin hooks
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
     }
     
     /**
@@ -110,6 +111,29 @@ class N8N_Chat_Widget {
         // Localize script with config
         $settings = $this->get_settings();
         wp_localize_script('n8n-chat-widget-script', 'ChatWidgetConfig', $settings);
+    }
+    
+    /**
+     * Enqueue admin assets
+     */
+    public function enqueue_admin_assets($hook) {
+        // Only load on our settings page
+        if ('settings_page_n8n-chat-widget' !== $hook) {
+            return;
+        }
+        
+        // Add inline script for color picker sync using event delegation
+        wp_add_inline_script('jquery', "
+            jQuery(document).ready(function($) {
+                // Use event delegation for idempotent handling
+                $(document).on('change', '.n8n-color-picker', function() {
+                    var textInput = $(this).next('.n8n-color-text');
+                    if (textInput.length) {
+                        textInput.val(this.value);
+                    }
+                });
+            });
+        ");
     }
     
     /**
@@ -428,19 +452,6 @@ class N8N_Chat_Widget {
         if (isset($args['description'])) {
             echo '<p class="description">' . esc_html($args['description']) . '</p>';
         }
-        ?>
-        <script>
-        (function() {
-            var colorInputs = document.querySelectorAll('.n8n-color-picker');
-            colorInputs.forEach(function(input) {
-                var textInput = input.nextElementSibling;
-                input.addEventListener('change', function() {
-                    textInput.value = this.value;
-                });
-            });
-        })();
-        </script>
-        <?php
     }
     
     /**
