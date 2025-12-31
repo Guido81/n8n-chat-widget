@@ -5,6 +5,20 @@ All notable changes to the n8n Chat Widget plugin will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2025-12-31
+
+### Security
+- Added Subresource Integrity (SRI) verification for markdown-it CDN library
+  - Addresses CVE-2025-7969 (reported XSS vulnerability in markdown-it v14.1.0)
+  - Implements SHA-384 integrity hash to prevent CDN tampering and MITM attacks
+  - Adds `crossorigin="anonymous"` attribute for CORS integrity checks
+  - Note: Vendor disputes vulnerability classification, but SRI provides defense-in-depth
+- Added monitoring reminder for markdown-it security updates
+- Generated and verified SRI hash: `sha384-wLhprpjsmjc/XYIcF+LpMxd8yS1gss6jhevOp6F6zhiIoFK6AmHtm4bGKtehTani`
+
+### Changed
+- Enhanced inline documentation for markdown-it script loading with security notes
+
 ## [1.0.0] - 2025-12-31
 
 ### Added

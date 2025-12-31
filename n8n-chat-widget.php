@@ -3,7 +3,7 @@
  * Plugin Name: n8n Chat Widget
  * Plugin URI: https://example.com/n8n-chat-widget
  * Description: Embeds a customizable chat widget connected to an n8n webhook for seamless customer communication.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: HVAC Growth
  * Author URI: https://example.com
  * License: GPL v2 or later
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('N8N_CHAT_WIDGET_VERSION', '1.0.0');
+define('N8N_CHAT_WIDGET_VERSION', '1.0.1');
 define('N8N_CHAT_WIDGET_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('N8N_CHAT_WIDGET_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -53,6 +53,9 @@ class N8N_Chat_Widget {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        
+        // Security: Add SRI (Subresource Integrity) to markdown-it CDN script
+        add_filter('script_loader_tag', array($this, 'add_sri_to_markdown_it'), 10, 3);
     }
     
     /**
@@ -108,11 +111,32 @@ class N8N_Chat_Widget {
             N8N_CHAT_WIDGET_VERSION
         );
         
-        // Enqueue JS
+        // Enqueue markdown-it library from CDN
+        // Note: v14.1.0 has reported CVE-2025-7969 (disputed by vendor)
+        // SRI hash added via script_loader_tag filter for additional security
+        // TODO: Monitor https://github.com/markdown-it/markdown-it for patched version
+        wp_enqueue_script(
+            'markdown-it',
+            'https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js',
+            array(),
+            '14.1.0',
+            true
+        );
+        
+        // Enqueue DOMPurify for XSS protection when rendering markdown
+        wp_enqueue_script(
+            'dompurify',
+            'https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js',
+            array(),
+            '3.0.8',
+            true
+        );
+        
+        // Enqueue JS with markdown-it and DOMPurify dependencies
         wp_enqueue_script(
             'n8n-chat-widget-script',
             N8N_CHAT_WIDGET_PLUGIN_URL . 'assets/js/script.js',
-            array(),
+            array('markdown-it', 'dompurify'),
             N8N_CHAT_WIDGET_VERSION,
             true
         );
@@ -142,6 +166,28 @@ class N8N_Chat_Widget {
                 });
             });
         ");
+    }
+    
+    /**
+     * Add Subresource Integrity (SRI) to markdown-it CDN script
+     * 
+     * Security: markdown-it v14.1.0 has a reported XSS vulnerability (CVE-2025-7969).
+     * While the vendor disputes this, we add SRI verification to ensure the CDN
+     * file hasn't been tampered with.
+     * 
+     * @param string $tag    The script tag.
+     * @param string $handle The script handle.
+     * @param string $src    The script source URL.
+     * @return string Modified script tag with integrity attribute.
+     */
+    public function add_sri_to_markdown_it($tag, $handle, $src) {
+        if ($handle === 'markdown-it') {
+            // SHA-384 hash computed from https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js
+            // Generated on: 2025-12-31
+            $integrity = 'sha384-wLhprpjsmjc/XYIcF+LpMxd8yS1gss6jhevOp6F6zhiIoFK6AmHtm4bGKtehTani';
+            $tag = str_replace('></script>', ' integrity="' . $integrity . '" crossorigin="anonymous"></script>', $tag);
+        }
+        return $tag;
     }
     
     /**

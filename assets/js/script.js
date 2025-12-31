@@ -19,6 +19,7 @@
     // State
     let isOpen = false;
     let isFirstOpen = true;
+    let md; // Markdown-it instance
     
     /**
      * Initialize the widget
@@ -49,6 +50,15 @@
         headerClose = document.getElementById('header-close');
         
         if (!container) return;
+        
+        // Initialize markdown-it if available
+        if (typeof window.markdownit !== 'undefined') {
+            md = window.markdownit({
+                html: false, // Disable HTML tags in markdown to prevent XSS
+                linkify: true,
+                typographer: true
+            });
+        }
         
         // Apply configuration
         applyConfig();
@@ -289,7 +299,15 @@
         
         const textDiv = document.createElement('div');
         textDiv.className = 'message-text';
-        textDiv.textContent = message;
+        
+        // Render markdown if available, otherwise use plain text
+        if (md && typeof DOMPurify !== 'undefined') {
+            // Sanitize rendered markdown to prevent XSS attacks from untrusted content
+            const renderedMarkdown = md.render(message);
+            textDiv.innerHTML = DOMPurify.sanitize(renderedMarkdown);
+        } else {
+            textDiv.textContent = message;
+        }
         
         messageDiv.appendChild(avatarImg);
         messageDiv.appendChild(textDiv);

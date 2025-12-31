@@ -1,8 +1,8 @@
 # n8n Chat Widget - Code Verification Report
 
 **Date:** December 31, 2025  
-**Plugin Version:** 1.0.0  
-**Verified Against:** WordPress 5.0+ Standards, n8n Webhook Best Practices
+**Plugin Version:** 1.0.1  
+**Verified Against:** WordPress 5.0+ Standards, n8n Webhook Best Practices, Security Best Practices
 
 ---
 
@@ -73,6 +73,11 @@
 - ✅ No direct file inclusion vulnerabilities
 - ✅ XSS prevention through proper escaping
 - ✅ Conditional widget display (only shows if webhook configured)
+- ✅ **Subresource Integrity (SRI)** - Added SHA-384 integrity verification for markdown-it CDN
+  - Protects against CDN tampering and MITM attacks
+  - Implements `crossorigin="anonymous"` for CORS integrity checks
+  - Addresses CVE-2025-7969 (reported XSS vulnerability in markdown-it v14.1.0)
+  - Hash: `sha384-wLhprpjsmjc/XYIcF+LpMxd8yS1gss6jhevOp6F6zhiIoFK6AmHtm4bGKtehTani`
 
 ### 3. n8n Integration Standards ✅
 

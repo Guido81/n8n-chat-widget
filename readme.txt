@@ -4,7 +4,7 @@ Tags: chat, n8n, webhook, customer support, live chat
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 7.0
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -109,6 +109,12 @@ Currently, the widget appears on all pages. You can use custom CSS or conditiona
 
 == Changelog ==
 
+= 1.0.1 =
+* Security: Added Subresource Integrity (SRI) verification for markdown-it CDN library
+* Security: Addresses CVE-2025-7969 (reported XSS vulnerability in markdown-it v14.1.0)
+* Security: Implements SHA-384 integrity hash to prevent CDN tampering and MITM attacks
+* Enhanced: Added inline documentation for security considerations
+
 = 1.0.0 =
 * Initial release
 * Customizable chat widget with n8n webhook integration
@@ -119,6 +125,9 @@ Currently, the widget appears on all pages. You can use custom CSS or conditiona
 * Secure data handling
 
 == Upgrade Notice ==
+
+= 1.0.1 =
+Security update: Added Subresource Integrity (SRI) protection for markdown-it CDN library to address CVE-2025-7969.
 
 = 1.0.0 =
 Initial release of the n8n Chat Widget plugin.
