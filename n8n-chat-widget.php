@@ -54,6 +54,10 @@ class N8N_Chat_Widget {
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
         
+        // AJAX hooks for chat proxy (works for both logged-in and non-logged-in users)
+        add_action('wp_ajax_n8n_chat_proxy', array($this, 'handle_chat_proxy'));
+        add_action('wp_ajax_nopriv_n8n_chat_proxy', array($this, 'handle_chat_proxy'));
+        
         // Security: Add SRI (Subresource Integrity) to markdown-it CDN script
         add_filter('script_loader_tag', array($this, 'add_sri_to_markdown_it'), 10, 3);
     }
@@ -89,6 +93,162 @@ class N8N_Chat_Widget {
         $defaults = $this->get_default_settings();
         $settings = get_option('n8n_chat_settings', array());
         return wp_parse_args($settings, $defaults);
+    }
+    
+    /**
+     * Handle chat proxy with secure session management using HttpOnly cookies
+     * 
+     * This endpoint:
+     * 1. Checks for existing session cookie
+     * 2. Generates new session ID if needed (using cryptographically secure method)
+     * 3. Sets HttpOnly, Secure, SameSite=Strict cookie
+     * 4. Forwards request to n8n with sessionId
+     * 5. Returns n8n response to frontend
+     */
+    public function handle_chat_proxy() {
+        // Verify nonce for CSRF protection
+        if (!check_ajax_referer('n8n_chat_nonce', 'nonce', false)) {
+            wp_send_json_error(array('message' => 'Security check failed'), 403);
+            return;
+        }
+        
+        // Get settings
+        $settings = $this->get_settings();
+        $webhook_url = $settings['webhookUrl'];
+        
+        // Validate webhook URL
+        if (empty($webhook_url)) {
+            // Log detailed error server-side
+            error_log('N8N Chat Widget - Configuration Error: Webhook URL not configured');
+            
+            // Return generic error to client
+            wp_send_json_error(array('message' => 'Chat service is not available'), 500);
+            return;
+        }
+        
+        // Get or generate session ID
+        $cookie_name = 'n8n_chat_session';
+        $session_id = isset($_COOKIE[$cookie_name]) ? sanitize_text_field($_COOKIE[$cookie_name]) : null;
+        
+        // Generate new session ID if none exists
+        if (empty($session_id)) {
+            // Use WordPress's wp_generate_uuid4() for cryptographically secure UUID generation
+            $session_id = wp_generate_uuid4();
+            
+            // Set HttpOnly cookie with secure flags
+            // Cookie expires in 1 hour (3600 seconds)
+            $is_secure = is_ssl(); // Only set Secure flag if site uses HTTPS
+            $cookie_set = setcookie(
+                $cookie_name,
+                $session_id,
+                array(
+                    'expires' => time() + 3600,
+                    'path' => '/',
+                    'domain' => '',
+                    'secure' => $is_secure,
+                    'httponly' => true,
+                    'samesite' => 'Strict'
+                )
+            );
+            
+            // If cookie setting failed, log error but continue (cookie might be set on next request)
+            if (!$cookie_set) {
+                error_log('N8N Chat Widget: Failed to set session cookie');
+            }
+        }
+        
+        // Get message from POST data (sent as FormData from frontend)
+        $message = isset($_POST['message']) ? sanitize_text_field($_POST['message']) : '';
+        
+        if (empty($message)) {
+            wp_send_json_error(array('message' => 'Message is required'), 400);
+            return;
+        }
+        
+        // Prepare request to n8n with sessionId
+        $n8n_request_body = array(
+            'message' => $message,
+            'sessionId' => $session_id
+        );
+        
+        // Forward request to n8n webhook
+        $response = wp_remote_post($webhook_url, array(
+            'method' => 'POST',
+            'headers' => array(
+                'Content-Type' => 'application/json'
+            ),
+            'body' => json_encode($n8n_request_body),
+            'timeout' => 30,
+            'sslverify' => true
+        ));
+        
+        // Check for errors
+        if (is_wp_error($response)) {
+            // Log detailed error server-side
+            error_log('N8N Chat Widget - Connection Error: ' . $response->get_error_message());
+            
+            // Parse webhook URL and redact sensitive parts (query parameters, tokens)
+            $parsed_url = wp_parse_url($webhook_url);
+            $safe_url = '';
+            if ($parsed_url) {
+                $safe_url = ($parsed_url['scheme'] ?? 'https') . '://' . ($parsed_url['host'] ?? 'unknown');
+                if (!empty($parsed_url['path'])) {
+                    $safe_url .= $parsed_url['path'];
+                }
+                // Indicate query string was present but redacted
+                if (!empty($parsed_url['query'])) {
+                    $safe_url .= '?[REDACTED]';
+                }
+            } else {
+                $safe_url = '[INVALID_URL]';
+            }
+            error_log('N8N Chat Widget - Webhook URL (sanitized): ' . $safe_url);
+            
+            // Return generic error to client
+            wp_send_json_error(array('message' => 'Failed to connect to chat service'), 500);
+            return;
+        }
+        
+        // Get response body
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+        
+        if ($response_code !== 200) {
+            // Log safe metadata only (no PII)
+            $response_headers = wp_remote_retrieve_headers($response);
+            $content_type = isset($response_headers['content-type']) ? $response_headers['content-type'] : 'unknown';
+            $body_length = strlen($response_body);
+            $body_checksum = hash('sha256', $response_body);
+            $timestamp = gmdate('Y-m-d H:i:s');
+            
+            error_log('N8N Chat Widget - HTTP Error: Response code ' . $response_code);
+            error_log('N8N Chat Widget - Response metadata: Length=' . $body_length . ' bytes, Content-Type=' . $content_type . ', Checksum=' . $body_checksum . ', Timestamp=' . $timestamp);
+            
+            // Return generic error to client
+            wp_send_json_error(array('message' => 'Chat service returned an error'), 500);
+            return;
+        }
+        
+        // Parse and return n8n response
+        $n8n_data = json_decode($response_body, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            // Log safe metadata only (no PII)
+            $response_headers = wp_remote_retrieve_headers($response);
+            $content_type = isset($response_headers['content-type']) ? $response_headers['content-type'] : 'unknown';
+            $body_length = strlen($response_body);
+            $body_hash_truncated = substr(hash('sha256', $response_body), 0, 8);
+            
+            error_log('N8N Chat Widget - JSON Parse Error: ' . json_last_error_msg());
+            error_log('N8N Chat Widget - Response metadata: HTTP ' . $response_code . ', Content-Type=' . $content_type . ', Length=' . $body_length . ' bytes, Hash=' . $body_hash_truncated);
+            
+            // Return generic error to client
+            wp_send_json_error(array('message' => 'Invalid response from chat service'), 500);
+            return;
+        }
+        
+        // Return successful response
+        wp_send_json_success($n8n_data);
     }
     
     /**
@@ -140,6 +300,10 @@ class N8N_Chat_Widget {
             N8N_CHAT_WIDGET_VERSION,
             true
         );
+        
+        // Add AJAX URL and nonce to settings for secure communication
+        $settings['ajaxUrl'] = admin_url('admin-ajax.php');
+        $settings['nonce'] = wp_create_nonce('n8n_chat_nonce');
         
         // Localize script with config
         wp_localize_script('n8n-chat-widget-script', 'ChatWidgetConfig', $settings);

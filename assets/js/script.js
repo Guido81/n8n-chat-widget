@@ -22,48 +22,18 @@
     let md; // Markdown-it instance
     
     /**
-     * Session Management (In-Memory)
+     * Session Management (Server-Side HttpOnly Cookies)
      * 
-     * SECURITY: Session identifiers are stored in-memory only to prevent XSS attacks.
-     * The sessionId will be lost on page reload, which is acceptable for chat sessions.
+     * SECURITY: Session identifiers are now managed by the WordPress backend using
+     * HttpOnly cookies to prevent XSS attacks. The session cookie is:
+     * - HttpOnly: Cannot be accessed by JavaScript
+     * - Secure: Only sent over HTTPS (when site uses HTTPS)
+     * - SameSite=Strict: Only sent to same-site requests (CSRF protection)
+     * - Automatically sent with each request via credentials: 'include'
      * 
-     * For production environments, implement server-side HttpOnly cookie management:
-     * 1. Backend should set session cookie with HttpOnly, Secure, and SameSite=Strict flags
-     * 2. Backend should validate session on each request using the cookie
-     * 3. Backend should clear cookie on logout/session end
-     * 4. Client includes credentials in fetch (already configured below)
-     * 
-     * Example PHP backend response headers:
-     * Set-Cookie: n8n_chat_session=<session_id>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600
+     * Sessions persist across page reloads and navigation, allowing conversation
+     * continuity while maintaining security.
      */
-    let sessionId = null; // In-memory session token, lost on page reload
-    
-    /**
-     * Generate a unique session ID (UUID v4) using cryptographically secure methods
-     */
-    function generateSessionId() {
-        // Use native crypto.randomUUID() if available (modern browsers)
-        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-            return crypto.randomUUID();
-        }
-        
-        // Fallback: Use crypto.getRandomValues() to generate RFC4122 v4 UUID
-        if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-            const bytes = new Uint8Array(16);
-            crypto.getRandomValues(bytes);
-            
-            // Set version (4) and variant bits according to RFC4122
-            bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
-            bytes[8] = (bytes[8] & 0x3f) | 0x80; // Variant 10
-            
-            // Convert to UUID string format
-            const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-            return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-        }
-        
-        // Should not reach here in modern browsers
-        throw new Error('Crypto API not available for secure session ID generation');
-    }
     
     /**
      * Initialize the widget
@@ -398,37 +368,37 @@
     }
     
     /**
-     * Send message to webhook
+     * Send message to backend proxy (WordPress AJAX endpoint)
+     * 
+     * The backend handles:
+     * - Session management via HttpOnly cookies
+     * - CSRF protection via nonce verification
+     * - Forwarding requests to n8n webhook
      */
     function sendToWebhook(message) {
-        const webhookUrl = config.webhookUrl;
+        const ajaxUrl = config.ajaxUrl;
+        const nonce = config.nonce;
         
-        if (!webhookUrl) {
-            addBotMessage('Webhook URL not configured. Please contact administrator.');
+        if (!ajaxUrl || !nonce) {
+            addBotMessage('Chat service not properly configured. Please contact administrator.');
             return;
-        }
-        
-        // Generate sessionId if it doesn't exist (first message)
-        if (!sessionId) {
-            sessionId = generateSessionId();
         }
         
         // Show typing indicator
         addTypingIndicator();
         
-        // Prepare request body with sessionId (required for n8n memory)
-        const requestBody = {
-            message: message,
-            sessionId: sessionId
-        };
+        // Prepare FormData for WordPress AJAX request
+        const formData = new FormData();
+        formData.append('action', 'n8n_chat_proxy');
+        formData.append('nonce', nonce);
+        formData.append('message', message);
         
-        // Send POST request
-        fetch(webhookUrl, {
+        // Send POST request to WordPress AJAX endpoint
+        // credentials: 'include' ensures cookies are sent with request
+        fetch(ajaxUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
+            credentials: 'include',
+            body: formData
         })
         .then(function(response) {
             if (!response.ok) {
@@ -440,16 +410,18 @@
             // Remove typing indicator
             removeTypingIndicator();
             
-            // Update sessionId if backend returns a different one
-            // (n8n typically echoes back the same sessionId we sent)
-            if (data.sessionId) {
-                sessionId = data.sessionId;
+            // Check WordPress AJAX response format
+            if (!data.success) {
+                throw new Error(data.data?.message || 'Request failed');
             }
             
+            // Extract n8n response from WordPress AJAX response
+            const n8nResponse = data.data;
+            
             // Add bot response
-            if (data.response || data.output) {
+            if (n8nResponse.response || n8nResponse.output) {
                 // Support both 'response' and 'output' fields from n8n
-                addBotMessage(data.response || data.output);
+                addBotMessage(n8nResponse.response || n8nResponse.output);
             } else {
                 addBotMessage('Sorry, I received an invalid response. Please try again.');
             }
