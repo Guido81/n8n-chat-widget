@@ -39,6 +39,33 @@
     let sessionId = null; // In-memory session token, lost on page reload
     
     /**
+     * Generate a unique session ID (UUID v4) using cryptographically secure methods
+     */
+    function generateSessionId() {
+        // Use native crypto.randomUUID() if available (modern browsers)
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+        
+        // Fallback: Use crypto.getRandomValues() to generate RFC4122 v4 UUID
+        if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+            const bytes = new Uint8Array(16);
+            crypto.getRandomValues(bytes);
+            
+            // Set version (4) and variant bits according to RFC4122
+            bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
+            bytes[8] = (bytes[8] & 0x3f) | 0x80; // Variant 10
+            
+            // Convert to UUID string format
+            const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+            return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+        }
+        
+        // Should not reach here in modern browsers
+        throw new Error('Crypto API not available for secure session ID generation');
+    }
+    
+    /**
      * Initialize the widget
      */
     function init() {
@@ -381,18 +408,19 @@
             return;
         }
         
+        // Generate sessionId if it doesn't exist (first message)
+        if (!sessionId) {
+            sessionId = generateSessionId();
+        }
+        
         // Show typing indicator
         addTypingIndicator();
         
-        // Prepare request body
+        // Prepare request body with sessionId (required for n8n memory)
         const requestBody = {
-            message: message
+            message: message,
+            sessionId: sessionId
         };
-        
-        // Include sessionId in request if it exists
-        if (sessionId) {
-            requestBody.sessionId = sessionId;
-        }
         
         // Send POST request
         fetch(webhookUrl, {
@@ -412,15 +440,16 @@
             // Remove typing indicator
             removeTypingIndicator();
             
-            // Store sessionId in memory if provided (NOT in localStorage for security)
-            // Note: Backend should use HttpOnly cookies instead of sending sessionId in response
+            // Update sessionId if backend returns a different one
+            // (n8n typically echoes back the same sessionId we sent)
             if (data.sessionId) {
                 sessionId = data.sessionId;
             }
             
             // Add bot response
-            if (data.response) {
-                addBotMessage(data.response);
+            if (data.response || data.output) {
+                // Support both 'response' and 'output' fields from n8n
+                addBotMessage(data.response || data.output);
             } else {
                 addBotMessage('Sorry, I received an invalid response. Please try again.');
             }
