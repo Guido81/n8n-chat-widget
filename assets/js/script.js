@@ -394,14 +394,13 @@
             requestBody.sessionId = sessionId;
         }
         
-        // Send POST request with credentials to support HttpOnly cookies
+        // Send POST request
         fetch(webhookUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestBody),
-            credentials: 'include' // Send cookies with request for HttpOnly session management
+            body: JSON.stringify(requestBody)
         })
         .then(function(response) {
             if (!response.ok) {
