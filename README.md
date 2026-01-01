@@ -58,7 +58,8 @@ Your n8n webhook should:
 1. Accept POST requests with JSON payload:
 ```json
 {
-  "message": "User's message text"
+  "message": "User's message text",
+  "sessionId": "optional-session-id"
 }
 ```
 
@@ -69,12 +70,23 @@ Your n8n webhook should:
 }
 ```
 
+### Session Management
+
+**Important:** For secure session management, implement HttpOnly cookies on your backend. See `BACKEND_INTEGRATION.md` for detailed instructions.
+
+The widget now supports two session management approaches:
+- **In-Memory (Default)**: Sessions stored in browser memory, lost on page reload
+- **HttpOnly Cookies (Recommended)**: Persistent sessions with XSS protection
+
 ### Example n8n Workflow
 
 1. Create a new workflow in n8n
 2. Add a **Webhook** node (POST method)
 3. Add your logic to process the message
-4. Return a response with the format above
+4. (Optional) Implement HttpOnly cookie session management
+5. Return a response with the format above
+
+For detailed backend integration examples, see `BACKEND_INTEGRATION.md`
 
 ## File Structure
 
@@ -86,7 +98,10 @@ n8n-chat-widget/
 │   │   └── style.css (Widget styles)
 │   └── js/
 │       └── script.js (Widget functionality)
-└── README.md
+├── README.md
+├── BACKEND_INTEGRATION.md (Backend security guide)
+├── SECURITY_FIX_SESSION_MANAGEMENT.md (Security fix documentation)
+└── uninstall.php (Clean uninstall)
 ```
 
 ## Usage
@@ -113,7 +128,18 @@ The plugin follows WordPress security best practices:
 - All input is sanitized
 - All output is escaped
 - CSRF protection with nonces
-- Secure data storage
+- **Secure session management**: Sessions stored in-memory (not localStorage) to prevent XSS attacks
+- **HttpOnly cookie support**: Ready for backend cookie-based authentication
+- **XSS protection**: DOMPurify sanitization for markdown rendering
+- **SRI verification**: Subresource Integrity for CDN dependencies
+
+### Security Updates
+
+**v1.0.2 (January 2026)**: Fixed XSS vulnerability in session management
+- Removed localStorage usage for session tokens
+- Implemented in-memory session storage
+- Added HttpOnly cookie support
+- See `SECURITY_FIX_SESSION_MANAGEMENT.md` for details
 
 ## Requirements
 

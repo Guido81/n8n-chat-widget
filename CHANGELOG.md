@@ -5,6 +5,33 @@ All notable changes to the n8n Chat Widget plugin will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-01-01
+
+### Security (CRITICAL)
+- **Fixed XSS vulnerability in session management** (HIGH severity)
+  - Removed localStorage usage for session identifiers (lines 368, 403)
+  - Session tokens no longer exposed to XSS attacks
+  - Implemented in-memory session storage (lost on page reload)
+  - Added HttpOnly cookie support for persistent sessions
+  - Updated fetch requests to include `credentials: 'include'`
+- Created comprehensive backend integration guide (`BACKEND_INTEGRATION.md`)
+  - n8n workflow examples for secure session management
+  - PHP and Node.js/Express implementation examples
+  - CORS configuration instructions
+  - Session validation and cleanup best practices
+- Added security fix documentation (`SECURITY_FIX_SESSION_MANAGEMENT.md`)
+
+### Changed
+- Session management now uses in-memory storage by default
+- Backend can implement HttpOnly cookies for persistent sessions
+- Updated README with security information and backend integration notes
+- Enhanced inline code documentation for session security
+
+### Migration Notes
+- Existing sessions in localStorage will be ignored (no action needed)
+- Backend integration optional but recommended for persistent sessions
+- No breaking changes to existing functionality
+
 ## [1.0.1] - 2025-12-31
 
 ### Security

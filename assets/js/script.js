@@ -22,6 +22,23 @@
     let md; // Markdown-it instance
     
     /**
+     * Session Management (In-Memory)
+     * 
+     * SECURITY: Session identifiers are stored in-memory only to prevent XSS attacks.
+     * The sessionId will be lost on page reload, which is acceptable for chat sessions.
+     * 
+     * For production environments, implement server-side HttpOnly cookie management:
+     * 1. Backend should set session cookie with HttpOnly, Secure, and SameSite=Strict flags
+     * 2. Backend should validate session on each request using the cookie
+     * 3. Backend should clear cookie on logout/session end
+     * 4. Client includes credentials in fetch (already configured below)
+     * 
+     * Example PHP backend response headers:
+     * Set-Cookie: n8n_chat_session=<session_id>; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600
+     */
+    let sessionId = null; // In-memory session token, lost on page reload
+    
+    /**
      * Initialize the widget
      */
     function init() {
@@ -367,15 +384,24 @@
         // Show typing indicator
         addTypingIndicator();
         
-        // Send POST request
+        // Prepare request body
+        const requestBody = {
+            message: message
+        };
+        
+        // Include sessionId in request if it exists
+        if (sessionId) {
+            requestBody.sessionId = sessionId;
+        }
+        
+        // Send POST request with credentials to support HttpOnly cookies
         fetch(webhookUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                message: message
-            })
+            body: JSON.stringify(requestBody),
+            credentials: 'include' // Send cookies with request for HttpOnly session management
         })
         .then(function(response) {
             if (!response.ok) {
@@ -386,6 +412,12 @@
         .then(function(data) {
             // Remove typing indicator
             removeTypingIndicator();
+            
+            // Store sessionId in memory if provided (NOT in localStorage for security)
+            // Note: Backend should use HttpOnly cookies instead of sending sessionId in response
+            if (data.sessionId) {
+                sessionId = data.sessionId;
+            }
             
             // Add bot response
             if (data.response) {
