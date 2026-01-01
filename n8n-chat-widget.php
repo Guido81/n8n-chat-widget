@@ -3,7 +3,7 @@
  * Plugin Name: n8n Chat Widget
  * Plugin URI: https://example.com/n8n-chat-widget
  * Description: Embeds a customizable chat widget connected to an n8n webhook for seamless customer communication.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: HVAC Growth
  * Author URI: https://example.com
  * License: GPL v2 or later
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('N8N_CHAT_WIDGET_VERSION', '1.0.2');
+define('N8N_CHAT_WIDGET_VERSION', '1.0.3');
 define('N8N_CHAT_WIDGET_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('N8N_CHAT_WIDGET_PLUGIN_URL', plugin_dir_url(__FILE__));
 
