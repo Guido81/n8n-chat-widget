@@ -5,6 +5,25 @@ All notable changes to the n8n Chat Widget plugin will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-01-02
+
+### Fixed
+- **Chat conversation persistence across pages** (BUG FIX)
+  - Implemented localStorage-based chat history persistence
+  - Chat messages now persist when navigating between pages
+  - Welcome message no longer repeats on every page load
+  - Session continuity maintained across page navigation
+  - Added `chatHistory` array to track conversation
+  - Added `loadChatHistory()`, `saveChatHistory()`, and `clearChatHistory()` functions
+  - Updated `addUserMessage()` and `addBotMessage()` to save messages to localStorage
+  - Teaser bubble now hidden when existing chat history is present
+
+### Technical Details
+- Session ID already persisted via HttpOnly cookies (backend)
+- Added chat UI state persistence via localStorage (frontend)
+- Chat history stored with timestamps for future analytics
+- Graceful fallback if localStorage is unavailable
+
 ## [1.0.2] - 2026-01-01
 
 ### Security (CRITICAL)

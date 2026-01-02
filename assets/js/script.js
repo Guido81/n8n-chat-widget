@@ -20,6 +20,7 @@
     let isOpen = false;
     let isFirstOpen = true;
     let md; // Markdown-it instance
+    let chatHistory = []; // Store chat history for persistence
     
     /**
      * Session Management (Server-Side HttpOnly Cookies)
@@ -33,7 +34,67 @@
      * 
      * Sessions persist across page reloads and navigation, allowing conversation
      * continuity while maintaining security.
+     * 
+     * Chat History Persistence:
+     * - Chat messages are stored in localStorage to maintain conversation across pages
+     * - History is associated with the session and cleared when session expires
      */
+    
+    /**
+     * Load chat history from localStorage
+     */
+    function loadChatHistory() {
+        try {
+            const stored = localStorage.getItem('n8n_chat_history');
+            const storedFirstOpen = localStorage.getItem('n8n_chat_first_open');
+            
+            if (stored) {
+                chatHistory = JSON.parse(stored);
+                
+                // Restore messages to UI
+                chatHistory.forEach(function(msg) {
+                    if (msg.type === 'user') {
+                        addUserMessage(msg.text, false); // false = don't save to history again
+                    } else if (msg.type === 'bot') {
+                        addBotMessage(msg.text, false); // false = don't save to history again
+                    }
+                });
+            }
+            
+            // Restore first open state
+            if (storedFirstOpen !== null) {
+                isFirstOpen = storedFirstOpen === 'true';
+            }
+        } catch (e) {
+            console.error('Error loading chat history:', e);
+            chatHistory = [];
+        }
+    }
+    
+    /**
+     * Save chat history to localStorage
+     */
+    function saveChatHistory() {
+        try {
+            localStorage.setItem('n8n_chat_history', JSON.stringify(chatHistory));
+            localStorage.setItem('n8n_chat_first_open', isFirstOpen.toString());
+        } catch (e) {
+            console.error('Error saving chat history:', e);
+        }
+    }
+    
+    /**
+     * Clear chat history from localStorage
+     */
+    function clearChatHistory() {
+        try {
+            localStorage.removeItem('n8n_chat_history');
+            localStorage.removeItem('n8n_chat_first_open');
+            chatHistory = [];
+        } catch (e) {
+            console.error('Error clearing chat history:', e);
+        }
+    }
     
     /**
      * Initialize the widget
@@ -80,8 +141,11 @@
         // Setup event listeners
         setupEventListeners();
         
-        // Show teaser if configured
-        if (config.showTeaserOnLoad) {
+        // Load chat history from previous sessions
+        loadChatHistory();
+        
+        // Show teaser if configured (but not if there's already a chat history)
+        if (config.showTeaserOnLoad && chatHistory.length === 0) {
             setTimeout(function() {
                 showTeaser();
             }, 2000); // Show after 2 seconds
@@ -221,6 +285,7 @@
         if (isFirstOpen && config.welcomeMessage) {
             addBotMessage(config.welcomeMessage);
             isFirstOpen = false;
+            saveChatHistory(); // Save the updated isFirstOpen state
         }
         
         // Focus input field
@@ -278,9 +343,16 @@
     
     /**
      * Add user message to chat
+     * @param {string} message - The message text
+     * @param {boolean} saveToHistory - Whether to save to localStorage (default: true)
      */
-    function addUserMessage(message) {
+    function addUserMessage(message, saveToHistory) {
         if (!chatMessages) return;
+        
+        // Default to true if not specified
+        if (saveToHistory === undefined) {
+            saveToHistory = true;
+        }
         
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message user-message';
@@ -292,15 +364,32 @@
         messageDiv.appendChild(textDiv);
         chatMessages.appendChild(messageDiv);
         
+        // Save to history
+        if (saveToHistory) {
+            chatHistory.push({
+                type: 'user',
+                text: message,
+                timestamp: Date.now()
+            });
+            saveChatHistory();
+        }
+        
         // Scroll to bottom
         scrollToBottom();
     }
     
     /**
      * Add bot message to chat
+     * @param {string} message - The message text
+     * @param {boolean} saveToHistory - Whether to save to localStorage (default: true)
      */
-    function addBotMessage(message) {
+    function addBotMessage(message, saveToHistory) {
         if (!chatMessages) return;
+        
+        // Default to true if not specified
+        if (saveToHistory === undefined) {
+            saveToHistory = true;
+        }
         
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message bot-message';
@@ -326,6 +415,16 @@
         messageDiv.appendChild(avatarImg);
         messageDiv.appendChild(textDiv);
         chatMessages.appendChild(messageDiv);
+        
+        // Save to history
+        if (saveToHistory) {
+            chatHistory.push({
+                type: 'bot',
+                text: message,
+                timestamp: Date.now()
+            });
+            saveChatHistory();
+        }
         
         // Scroll to bottom
         scrollToBottom();
